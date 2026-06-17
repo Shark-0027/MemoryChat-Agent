@@ -88,6 +88,10 @@ class Settings(BaseSettings):
         default=PROJECT_ROOT / "data" / "chroma",
         description="Local filesystem path for the ChromaDB vector store.",
     )
+    mem0_collection_name: str = Field(
+        default="mem0",
+        description="ChromaDB collection name used by mem0.",
+    )
     mem0_llm_provider: str = Field(
         default="openai",
         description="LLM provider mem0 uses for memory extraction.",
@@ -95,6 +99,10 @@ class Settings(BaseSettings):
     mem0_embedder_provider: str = Field(
         default="openai",
         description="Embedder provider mem0 uses for vector generation.",
+    )
+    mem0_default_user_id: str = Field(
+        default="default_user",
+        description="Default user identifier used to scope memories.",
     )
 
     # ------------------------------------------------------------------ #
