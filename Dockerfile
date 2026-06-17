@@ -6,6 +6,8 @@
 # fast dependency installation.
 # =============================================================================
 
+ARG APP_VERSION=0.1.0
+
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - install dependencies into a virtual environment
 # -----------------------------------------------------------------------------
@@ -33,9 +35,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # -----------------------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
 
+ARG APP_VERSION
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    APP_VERSION=${APP_VERSION}
+
+# OCI-standard image labels for discoverability.
+LABEL org.opencontainers.image.title="MemoryChat-Agent" \
+      org.opencontainers.image.description="AI Assistant with long-term memory powered by mem0" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.source="https://github.com/your-username/MemoryChat-Agent" \
+      org.opencontainers.image.licenses="MIT"
 
 # Create a non-root user for security.
 RUN groupadd --gid 1000 appuser \
@@ -47,6 +58,7 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 
 # Copy application source code.
+# NOTE: .env is excluded by .dockerignore so secrets never enter the image.
 COPY --chown=appuser:appuser . .
 
 # Ensure the data directory exists for ChromaDB persistence.

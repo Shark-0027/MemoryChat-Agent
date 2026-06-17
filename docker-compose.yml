@@ -3,6 +3,11 @@
 # =============================================================================
 # Start the full application with a single command:
 #     docker compose up
+#
+# The project directory is bind-mounted into the container so source-code
+# edits on the host take effect immediately (Streamlit auto-reloads).
+# The container's virtualenv and the ChromaDB data directory are protected
+# by separate volumes so they are never clobbered by the bind mount.
 # =============================================================================
 
 services:
@@ -18,12 +23,21 @@ services:
     env_file:
       - .env
     volumes:
+      # Bind-mount the project directory so host-side code edits are
+      # reflected inside the container (great for development & debugging).
+      - .:/app
+      # Protect the container-built virtualenv from the bind mount above.
+      - /app/.venv
       # Persist the ChromaDB vector store across container restarts.
       - memory-data:/app/data
-      # Mount .env so config changes do not require a rebuild.
+      # Mount .env read-only so config changes do not require a rebuild.
       - ./.env:/app/.env:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
       interval: 30s
       timeout: 10s
       retries: 3
