@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     at the project root is automatically loaded when present.
 
     Attributes:
+        app_name: Application display name shown in the UI.
+        app_version: Application version string shown in the UI.
         openai_api_key: Secret OpenAI API key. Required.
         openai_base_url: Base URL for the OpenAI-compatible API endpoint.
         openai_model: Chat completion model identifier.
@@ -108,6 +110,14 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Application Configuration
     # ------------------------------------------------------------------ #
+    app_name: str = Field(
+        default="MemoryChat-Agent",
+        description="Application display name shown in the UI title and sidebar.",
+    )
+    app_version: str = Field(
+        default="0.1.0",
+        description="Application version string shown in the UI.",
+    )
     app_port: int = Field(
         default=8501,
         ge=1,

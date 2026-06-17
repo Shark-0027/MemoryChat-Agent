@@ -1,84 +1,126 @@
-"""Streamlit application entry point.
+"""Streamlit entry point for MemoryChat-Agent.
 
-This module bootstraps the MemoryChat-Agent web UI. It configures the page
-layout, renders the sidebar navigation, and dispatches to the appropriate
-page module (chat, memory, or config).
+This module is the UI adapter only — it wires together the page modules
+and renders the shared sidebar (system status, navigation, action buttons).
+All business logic lives in :mod:`app.agent`, :mod:`memory.manager`, and
+:mod:`llm.client`.
 
-Business logic will be implemented in a subsequent phase. For now this module
-provides a minimal runnable shell so the app starts without errors.
+Run with::
 
-Example:
-    Run the app locally::
-
-        uv run streamlit run app/main.py
+    uv run streamlit run app/main.py
 """
 
 from __future__ import annotations
 
-import logging
-
 import streamlit as st
 
 from config import settings
-from utils.logger import get_logger
+from memory.exceptions import MemoryError
+from memory.manager import MemoryManager
+from ui.chat_page import clear_chat, render_chat_page
+from ui.components import render_sidebar_actions, render_sidebar_status
+from ui.config_page import render_config_page
+from ui.memory_page import clear_memory_session, render_memory_page
 
-logger: logging.Logger = get_logger(__name__)
+# Type alias for page renderer functions.
+PageRenderer = callable
 
 
-def main() -> None:
-    """Render the MemoryChat-Agent Streamlit application.
+# ---------------------------------------------------------------------------
+# Page registry
+# ---------------------------------------------------------------------------
+PAGES: dict[str, PageRenderer] = {
+    "💬 Chat": render_chat_page,
+    "🧠 Memory": render_memory_page,
+    "⚙️ Config": render_config_page,
+}
 
-    Sets up the page configuration, sidebar navigation, and delegates rendering
-    to the selected page module. The status bar is always visible.
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _get_memory_count() -> int | None:
+    """Return the total number of stored memories, or None on failure.
+
+    Returns:
+        The memory count, or ``None`` if it could not be retrieved.
     """
+    try:
+        manager = MemoryManager()
+        response = manager.list_memory(limit=10000)
+        return len(response.get("results", []))
+    except MemoryError:
+        return None
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _handle_clear_chat() -> None:
+    """Clear the conversation history."""
+    clear_chat()
+
+
+def _handle_clear_memory() -> None:
+    """Clear all stored memories."""
+    clear_memory_session()
+    st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Page config & layout
+# ---------------------------------------------------------------------------
+def main() -> None:
+    """Render the Streamlit application."""
     st.set_page_config(
-        page_title="MemoryChat-Agent",
+        page_title=f"{settings.app_name} — {settings.app_version}",
         page_icon="🧠",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
-    st.title("MemoryChat-Agent")
-    st.caption("An AI Assistant with Long-Term Memory powered by mem0")
+    # --- Sidebar: title ------------------------------------------------
+    st.sidebar.title(f"🧠 {settings.app_name}")
+    st.sidebar.caption(f"v{settings.app_version} — powered by mem0")
+    st.sidebar.divider()
 
-    # ------------------------------------------------------------------ #
-    # Sidebar navigation (placeholder; pages wired up in the next phase).
-    # ------------------------------------------------------------------ #
-    st.sidebar.title("Navigation")
-    page: str = st.sidebar.radio(
+    # --- Sidebar: system status ---------------------------------------
+    memory_count = _get_memory_count()
+    render_sidebar_status(memory_count=memory_count)
+
+    # --- Sidebar: page navigation -------------------------------------
+    st.sidebar.markdown("## 🧭 Navigation")
+    selected_page = st.sidebar.radio(
         "Go to",
-        options=["Chat", "Memory", "Config"],
-        index=0,
+        options=list(PAGES.keys()),
+        label_visibility="collapsed",
+    )
+    st.sidebar.divider()
+
+    # --- Sidebar: action buttons --------------------------------------
+    render_sidebar_actions(
+        on_clear_chat=_handle_clear_chat,
+        on_clear_memory=_handle_clear_memory,
     )
 
-    # Status bar showing current configuration health.
-    _render_status_bar()
+    # --- Sidebar: footer ----------------------------------------------
+    st.sidebar.markdown(
+        f"""
+        <div style="
+            text-align: center;
+            color: #888;
+            font-size: 0.8rem;
+            padding-top: 1rem;
+        ">
+            {settings.app_name}<br>
+            An AI Assistant with Long-Term Memory
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # Page dispatch — full implementations arrive in the next phase.
-    if page == "Chat":
-        st.info("💬 The Chat page will be implemented in the next phase.")
-    elif page == "Memory":
-        st.info("🧠 The Memory page will be implemented in the next phase.")
-    elif page == "Config":
-        st.info("⚙️ The Config page will be implemented in the next phase.")
-
-
-def _render_status_bar() -> None:
-    """Render a lightweight status bar with configuration health info.
-
-    Displays whether the OpenAI API key is set and the configured model.
-    """
-    status_col, model_col = st.columns([1, 2])
-    with status_col:
-        if settings.is_configured:
-            st.success("API key configured")
-        else:
-            st.warning("API key missing — set OPENAI_API_KEY in .env")
-    with model_col:
-        st.caption(
-            f"Model: `{settings.openai_model}` · "
-            f"Embedding: `{settings.openai_embedding_model}`"
-        )
+    # --- Main content: render the selected page -----------------------
+    page_renderer = PAGES[selected_page]
+    page_renderer()
 
 
 if __name__ == "__main__":
