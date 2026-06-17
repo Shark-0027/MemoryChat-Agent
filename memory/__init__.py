@@ -10,6 +10,7 @@ Modules:
     manager: The :class:`MemoryManager` that wraps mem0's Memory client.
     exceptions: Custom exception hierarchy for memory errors.
     types: TypedDict definitions for memory operation results.
+    stats: Pure-function statistics aggregation over memory records.
 
 Example:
     >>> from memory.manager import MemoryManager
@@ -25,6 +26,7 @@ from memory.exceptions import (
     MemoryOperationError,
 )
 from memory.manager import MemoryManager
+from memory.stats import aggregate_statistics
 
 __all__ = [
     "MemoryManager",
@@ -33,4 +35,5 @@ __all__ = [
     "MemoryInitializationError",
     "MemoryNotFoundError",
     "MemoryOperationError",
+    "aggregate_statistics",
 ]

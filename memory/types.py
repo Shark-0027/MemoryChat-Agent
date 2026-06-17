@@ -169,3 +169,93 @@ class MessageResponse(TypedDict):
     """
 
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Batch operations
+# ---------------------------------------------------------------------------
+class BatchDeleteResult(TypedDict):
+    """Result of a batch delete operation.
+
+    Attributes:
+        deleted: List of memory ids that were successfully deleted.
+        failed: List of dicts describing failures, each with ``id`` and
+            ``error`` keys.
+    """
+
+    deleted: list[str]
+    failed: list[dict[str, str]]
+
+
+class BatchDeleteResponse(TypedDict):
+    """Top-level response shape from ``delete_memories_batch``.
+
+    Attributes:
+        results: The batch delete result payload.
+    """
+
+    results: BatchDeleteResult
+
+
+# ---------------------------------------------------------------------------
+# Statistics aggregation
+# ---------------------------------------------------------------------------
+class CategoryStat(TypedDict):
+    """A single category count entry.
+
+    Attributes:
+        category: The category name (or ``"uncategorized"``).
+        count: The number of memories in this category.
+    """
+
+    category: str
+    count: int
+
+
+class DailyCountStat(TypedDict):
+    """A single daily count entry.
+
+    Attributes:
+        date: ISO date string (``YYYY-MM-DD``).
+        count: Number of memories created that day.
+    """
+
+    date: str
+    count: int
+
+
+class TagStat(TypedDict):
+    """A single tag count entry.
+
+    Attributes:
+        tag: The tag string.
+        count: The number of memories carrying this tag.
+    """
+
+    tag: str
+    count: int
+
+
+class MemoryStatistics(TypedDict):
+    """Aggregated statistics over a user's memory store.
+
+    Attributes:
+        total: Total number of memories.
+        today: Number of memories created today.
+        this_week: Number of memories created in the last 7 days.
+        this_month: Number of memories created in the last 30 days.
+        categories: List of category count entries.
+        tags: List of tag count entries.
+        daily_counts: List of daily count entries (last 30 days).
+        last_updated: ISO timestamp of the most recently updated memory, or
+            ``None`` if no memories exist.
+    """
+
+    total: int
+    today: int
+    this_week: int
+    this_month: int
+    categories: list[CategoryStat]
+    tags: list[TagStat]
+    daily_counts: list[DailyCountStat]
+    last_updated: str | None

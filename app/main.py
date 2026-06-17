@@ -19,8 +19,9 @@ from memory.exceptions import MemoryError
 from memory.manager import MemoryManager
 from ui.chat_page import clear_chat, render_chat_page
 from ui.components import render_sidebar_actions, render_sidebar_status
-from ui.config_page import render_config_page
-from ui.memory_page import clear_memory_session, render_memory_page
+from ui.dashboard_page import clear_memory_session, render_dashboard_page
+from ui.settings_page import render_settings_page
+from ui.stats_page import render_stats_page
 
 # Type alias for page renderer functions.
 PageRenderer = callable
@@ -31,8 +32,9 @@ PageRenderer = callable
 # ---------------------------------------------------------------------------
 PAGES: dict[str, PageRenderer] = {
     "💬 Chat": render_chat_page,
-    "🧠 Memory": render_memory_page,
-    "⚙️ Config": render_config_page,
+    "🧠 Memory Dashboard": render_dashboard_page,
+    "📊 Statistics": render_stats_page,
+    "⚙️ Settings": render_settings_page,
 }
 
 
@@ -112,7 +114,7 @@ def main() -> None:
             padding-top: 1rem;
         ">
             {settings.app_name}<br>
-            An AI Assistant with Long-Term Memory
+            Agent Memory Management System
         </div>
         """,
         unsafe_allow_html=True,

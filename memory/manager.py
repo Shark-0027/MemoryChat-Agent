@@ -31,15 +31,18 @@ from typing import Any
 from config import settings
 from memory.exceptions import (
     MemoryConfigError,
+    MemoryError,
     MemoryInitializationError,
     MemoryNotFoundError,
     MemoryOperationError,
 )
 from memory.types import (
+    BatchDeleteResponse,
     MemoryAddResponse,
     MemoryListResponse,
     MemoryRecord,
     MemorySearchResponse,
+    MemoryStatistics,
     MessageResponse,
 )
 from utils.logger import get_logger
@@ -449,6 +452,153 @@ class MemoryManager:
 
         logger.info("All memories cleared for user=%s", uid)
         return response
+
+    # ------------------------------------------------------------------ #
+    # Public API — Batch operations & statistics
+    # ------------------------------------------------------------------ #
+    def delete_memories_batch(
+        self,
+        memory_ids: list[str],
+    ) -> BatchDeleteResponse:
+        """Delete multiple memories by id, collecting per-item failures.
+
+        Unlike :meth:`clear_memory` (which wipes everything for a user),
+        this method deletes a specific set of memory ids. Failures for
+        individual ids (e.g. not found) are collected rather than raised,
+        so the caller can see which deletions succeeded and which failed.
+
+        Args:
+            memory_ids: The list of memory ids to delete.
+
+        Returns:
+            A dict with a ``"results"`` key containing ``deleted`` and
+            ``failed`` lists.
+        """
+        logger.info("Batch deleting %d memory id(s)", len(memory_ids))
+
+        deleted: list[str] = []
+        failed: list[dict[str, str]] = []
+
+        for mid in memory_ids:
+            try:
+                self.delete_memory(mid)
+                deleted.append(mid)
+            except MemoryNotFoundError as exc:
+                failed.append({"id": mid, "error": str(exc)})
+            except MemoryError as exc:
+                failed.append({"id": mid, "error": str(exc)})
+
+        logger.info(
+            "Batch delete completed: %d deleted, %d failed",
+            len(deleted),
+            len(failed),
+        )
+        return {"results": {"deleted": deleted, "failed": failed}}
+
+    def get_statistics(
+        self,
+        user_id: str | None = None,
+    ) -> MemoryStatistics:
+        """Aggregate statistics over a user's memory store.
+
+        Args:
+            user_id: The user identifier. If ``None``, uses the manager's
+                default user id.
+
+        Returns:
+            A :class:`memory.types.MemoryStatistics` dict with total/today/
+            this_week/this_month counts, category/tag breakdowns, daily
+            counts for the last 30 days, and the last-updated timestamp.
+
+        Raises:
+            MemoryOperationError: If the underlying list operation fails.
+        """
+        from memory.stats import aggregate_statistics
+
+        uid = self._resolve_user_id(user_id)
+        logger.info("Computing statistics for user=%s", uid)
+
+        response = self.list_memory(user_id=uid, limit=10000)
+        memories: list[MemoryRecord] = response.get("results", [])
+        return aggregate_statistics(memories)
+
+    def export_memories(
+        self,
+        user_id: str | None = None,
+    ) -> list[MemoryRecord]:
+        """Export all memories for a user as a JSON-serializable list.
+
+        Args:
+            user_id: The user identifier. If ``None``, uses the manager's
+                default user id.
+
+        Returns:
+            A list of memory record dicts suitable for JSON serialization.
+
+        Raises:
+            MemoryOperationError: If the underlying list operation fails.
+        """
+        uid = self._resolve_user_id(user_id)
+        logger.info("Exporting memories for user=%s", uid)
+
+        response = self.list_memory(user_id=uid, limit=10000)
+        memories: list[MemoryRecord] = response.get("results", [])
+        logger.info("Exported %d memory record(s)", len(memories))
+        return memories
+
+    def import_memories(
+        self,
+        memories: list[dict[str, Any]],
+        user_id: str | None = None,
+    ) -> BatchDeleteResponse:
+        """Import memories from a list of record dicts.
+
+        Each record's ``memory`` text is re-added via :meth:`add_memory`
+        with ``infer=False`` (raw storage, no LLM extraction) so the import
+        is deterministic and does not require API calls beyond embeddings.
+
+        Args:
+            memories: The list of memory record dicts (must each contain a
+                ``memory`` key).
+            user_id: The user identifier to scope the import. If ``None``,
+                uses the manager's default user id.
+
+        Returns:
+            A dict with a ``"results"`` key containing ``deleted`` (here,
+            the ids of newly created memories) and ``failed`` lists.
+        """
+        uid = self._resolve_user_id(user_id)
+        logger.info("Importing %d memory record(s) for user=%s", len(memories), uid)
+
+        created: list[str] = []
+        failed: list[dict[str, str]] = []
+
+        for index, record in enumerate(memories):
+            content = record.get("memory") or record.get("content")
+            if not content or not str(content).strip():
+                failed.append({"id": f"index:{index}", "error": "empty content"})
+                continue
+            metadata = record.get("metadata")
+            try:
+                response = self.add_memory(
+                    messages=str(content).strip(),
+                    user_id=uid,
+                    metadata=metadata,
+                    infer=False,
+                )
+                for item in response.get("results", []):
+                    new_id = item.get("id")
+                    if new_id:
+                        created.append(new_id)
+            except MemoryError as exc:
+                failed.append({"id": f"index:{index}", "error": str(exc)})
+
+        logger.info(
+            "Import completed: %d created, %d failed",
+            len(created),
+            len(failed),
+        )
+        return {"results": {"deleted": created, "failed": failed}}
 
     # ------------------------------------------------------------------ #
     # Lifecycle
